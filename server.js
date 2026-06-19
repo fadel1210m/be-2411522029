@@ -19,34 +19,44 @@ const pool = mysql.createPool({
 
 const studentData = { name: "Fadel Muhammad", nim: "2411522029" };
 
-// Tambahkan ini agar root path '/' tidak 404
+// Root path '/' agar tidak 404
 app.get('/', (req, res) => {
     res.json({ message: "Backend API is ready!", status: "online" });
 });
 
-// 1. GET /health
+// 1. GET /health [Sesuai Dokumen Aturan]
 app.get('/health', async (req, res) => {
     try {
         await pool.query('SELECT 1');
-        res.json({ status: "success", database: "connected", student: studentData });
+        res.json({ 
+            status: "success", 
+            message: "Backend is running", 
+            database: "connected", 
+            student: studentData 
+        });
     } catch (error) {
-        res.status(500).json({ status: "error", database: "disconnected", error: error.message });
+        res.status(500).json({ 
+            status: "error", 
+            message: "Backend is running, but database is not connected", 
+            database: "disconnected", 
+            student: studentData 
+        });
     }
 });
 
-// 2. GET /schema
+// 2. GET /schema [Sesuai Dokumen Aturan]
 app.get('/schema', (req, res) => {
     res.json({
-        student: { name: "Fadel Muhammad", nim: "2411522029" }, // Tambahkan ini
+        student: studentData,
         resource: { name: "vinyls", label: "Katalog Piringan Hitam" },
         fields: [
-            { name: "album_title", label: "Judul Album", type: "text", required: true },
-            { name: "artist", label: "Artis/Band", type: "text", required: true },
-            { name: "genre", label: "Genre", type: "text", required: true },
-            { name: "release_year", label: "Tahun Rilis", type: "number", required: false },
-            { name: "price", label: "Harga (Rp)", type: "number", required: true }
+            { name: "album_title", label: "Judul Album", type: "text", required: true, showInTable: true },
+            { name: "artist", label: "Artis/Band", type: "text", required: true, showInTable: true },
+            { name: "genre", label: "Genre", type: "text", required: true, showInTable: true },
+            { name: "release_year", label: "Tahun Rilis", type: "number", required: false, showInTable: true },
+            { name: "price", label: "Harga (Rp)", type: "number", required: true, showInTable: true }
         ],
-        endpoints: { // Tambahkan ini
+        endpoints: {
             list: "/vinyls",
             detail: "/vinyls/{id}",
             create: "/vinyls",
@@ -55,14 +65,14 @@ app.get('/schema', (req, res) => {
         }
     });
 });
-// 3. GET /vinyls (Langsung kirim array data, ini yang paling disukai frontend)
+
+// 3. GET /vinyls (Ambil Semua Data)
 app.get('/vinyls', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM vinyls');
-        
-        // UBAH RESPONSNYA MENJADI BERBUNGKUS SEPERTI INI:
         res.json({
             status: "success",
+            message: "Data retrieved successfully",
             data: rows 
         });
     } catch (error) {
@@ -70,7 +80,24 @@ app.get('/vinyls', async (req, res) => {
     }
 });
 
-// 4. POST /vinyls
+// 4. GET /vinyls/:id (Ambil Detail Data - TAMBAHAN WAJIB)
+app.get('/vinyls/:id', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM vinyls WHERE id = ?', [req.params.id]);
+        if (rows.length === 0) {
+            return res.status(404).json({ status: "error", message: "Data not found" });
+        }
+        res.json({
+            status: "success",
+            message: "Data retrieved successfully",
+            data: rows[0]
+        });
+    } catch (error) {
+        res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
+// 5. POST /vinyls (Tambah Data)
 app.post('/vinyls', async (req, res) => {
     const { album_title, artist, genre, release_year, price } = req.body;
     try {
@@ -78,13 +105,17 @@ app.post('/vinyls', async (req, res) => {
             'INSERT INTO vinyls (album_title, artist, genre, release_year, price) VALUES (?, ?, ?, ?, ?)',
             [album_title, artist, genre, release_year || null, Number(price)]
         );
-        res.status(201).json({ id: result.insertId, album_title, artist, genre, release_year, price });
+        res.status(201).json({ 
+            status: "success",
+            message: "Data created successfully",
+            data: { id: result.insertId, album_title, artist, genre, release_year, price }
+        });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ status: "error", message: error.message });
     }
 });
 
-// 5. PUT /vinyls/:id
+// 6. PUT /vinyls/:id (Ubah Data)
 app.put('/vinyls/:id', async (req, res) => {
     const { album_title, artist, genre, release_year, price } = req.body;
     try {
@@ -92,19 +123,26 @@ app.put('/vinyls/:id', async (req, res) => {
             'UPDATE vinyls SET album_title = ?, artist = ?, genre = ?, release_year = ?, price = ? WHERE id = ?',
             [album_title, artist, genre, release_year || null, Number(price), req.params.id]
         );
-        res.json({ id: req.params.id, album_title, artist, genre, release_year, price });
+        res.json({ 
+            status: "success",
+            message: "Data updated successfully",
+            data: { id: req.params.id, album_title, artist, genre, release_year, price }
+        });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ status: "error", message: error.message });
     }
 });
 
-// 6. DELETE /vinyls/:id
+// 7. DELETE /vinyls/:id (Hapus Data)
 app.delete('/vinyls/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM vinyls WHERE id = ?', [req.params.id]);
-        res.json({ message: "Deleted successfully" });
+        res.json({ 
+            status: "success",
+            message: "Data deleted successfully" 
+        });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ status: "error", message: error.message });
     }
 });
 
